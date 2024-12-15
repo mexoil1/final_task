@@ -1,78 +1,77 @@
-//SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0 <0.9.0;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
 
-// Useful for debugging. Remove when deploying to a live network.
-import "hardhat/console.sol";
-
-// Use openzeppelin to inherit battle-tested implementations (ERC20, ERC721, etc)
-// import "@openzeppelin/contracts/access/Ownable.sol";
-
-/**
- * A smart contract that allows changing a state variable of the contract and tracking the changes
- * It also allows the owner to withdraw the Ether in the contract
- * @author BuidlGuidl
- */
-contract YourContract {
-    // State Variables
-    address public immutable owner;
-    string public greeting = "Building Unstoppable Apps!!!";
-    bool public premium = false;
-    uint256 public totalCounter = 0;
-    mapping(address => uint) public userGreetingCounter;
-
-    // Events: a way to emit log statements from smart contract that can be listened to by external parties
-    event GreetingChange(address indexed greetingSetter, string newGreeting, bool premium, uint256 value);
-
-    // Constructor: Called once on contract deployment
-    // Check packages/hardhat/deploy/00_deploy_your_contract.ts
-    constructor(address _owner) {
-        owner = _owner;
+contract CopyrightRegistry {
+    // Структура контента
+    struct Content {
+        address author; // Адрес автора контента
+        uint256 timestamp; // Время регистрации контента
+        string contentHash; // Хэш контента
     }
 
-    // Modifier: used to define a set of rules that must be met before or after a function is executed
-    // Check the withdraw() function
-    modifier isOwner() {
-        // msg.sender: predefined variable that represents address of the account that called the current function
-        require(msg.sender == owner, "Not the Owner");
-        _;
+    // Сопоставление хэша контента с его данными
+    mapping(string => Content) private registeredContent;
+
+    // Событие при регистрации контента
+    event ContentRegistered(address indexed author, string contentHash, uint256 timestamp);
+    // Событие при передаче прав на контент
+    event OwnershipTransferred(string contentHash, address indexed previousOwner, address indexed newOwner);
+
+    /// @notice Регистрация контента
+    /// @param _contentHash Хэш контента для регистрации
+    function registerContent(string memory _contentHash) public {
+        require(bytes(_contentHash).length > 0, "Content hash cannot be empty"); // Проверка, что хэш не пустой
+        require(registeredContent[_contentHash].author == address(0), "Content already registered"); // Проверка, что контент еще не зарегистрирован
+
+        // Сохранение данных о контенте
+        registeredContent[_contentHash] = Content({
+            author: msg.sender,
+            timestamp: block.timestamp,
+            contentHash: _contentHash
+        });
+
+        emit ContentRegistered(msg.sender, _contentHash, block.timestamp); // Эмитирование события
     }
 
-    /**
-     * Function that allows anyone to change the state variable "greeting" of the contract and increase the counters
-     *
-     * @param _newGreeting (string memory) - new greeting to save on the contract
-     */
-    function setGreeting(string memory _newGreeting) public payable {
-        // Print data to the hardhat chain console. Remove when deploying to a live network.
-        console.log("Setting new greeting '%s' from %s", _newGreeting, msg.sender);
+    /// @notice Проверка регистрации контента
+    /// @param _contentHash Хэш контента для проверки
+    /// @return author Адрес владельца контента
+    /// @return timestamp Метка времени регистрации
+    function verifyContent(string memory _contentHash) public view returns (address author, uint256 timestamp) {
+        require(bytes(_contentHash).length > 0, "Content hash cannot be empty"); // Проверка, что хэш не пустой
 
-        // Change state variables
-        greeting = _newGreeting;
-        totalCounter += 1;
-        userGreetingCounter[msg.sender] += 1;
+        Content memory content = registeredContent[_contentHash]; // Получение данных о контенте
+        require(content.author != address(0), "Content not registered"); // Проверка, что контент зарегистрирован
 
-        // msg.value: built-in global variable that represents the amount of ether sent with the transaction
-        if (msg.value > 0) {
-            premium = true;
-        } else {
-            premium = false;
-        }
-
-        // emit: keyword used to trigger an event
-        emit GreetingChange(msg.sender, _newGreeting, msg.value > 0, msg.value);
+        return (content.author, content.timestamp); // Возвращение данных
     }
 
-    /**
-     * Function that allows the owner to withdraw all the Ether in the contract
-     * The function can only be called by the owner of the contract as defined by the isOwner modifier
-     */
-    function withdraw() public isOwner {
-        (bool success, ) = owner.call{ value: address(this).balance }("");
-        require(success, "Failed to send Ether");
+    /// @notice Получение владельца контента
+    /// @param _contentHash Хэш контента
+    /// @return owner Адрес владельца контента
+    function getContentOwner(string memory _contentHash) public view returns (address owner) {
+        require(bytes(_contentHash).length > 0, "Content hash cannot be empty"); // Проверка, что хэш не пустой
+
+        Content memory content = registeredContent[_contentHash]; // Получение данных о контенте
+        require(content.author != address(0), "Content not registered"); // Проверка, что контент зарегистрирован
+
+        return content.author; // Возвращение адреса владельца
     }
 
-    /**
-     * Function that allows the contract to receive ETH
-     */
-    receive() external payable {}
+    /// @notice Передача владения контентом
+    /// @param _contentHash Хэш контента
+    /// @param _newOwner Новый владелец контента
+    function transferOwnership(string memory _contentHash, address _newOwner) public {
+        require(bytes(_contentHash).length > 0, "Content hash cannot be empty"); // Проверка, что хэш не пустой
+        require(_newOwner != address(0), "New owner cannot be the zero address"); // Проверка, что новый владелец не является нулевым адресом
+
+        Content storage content = registeredContent[_contentHash]; // Получение данных о контенте
+        require(content.author != address(0), "Content not registered"); // Проверка, что контент зарегистрирован
+        require(content.author == msg.sender, "Only the current owner can transfer ownership"); // Проверка, что вызывающий является владельцем
+
+        address previousOwner = content.author; // Сохранение текущего владельца
+        content.author = _newOwner; // Изменение владельца
+
+        emit OwnershipTransferred(_contentHash, previousOwner, _newOwner); // Эмитирование события передачи прав
+    }
 }
